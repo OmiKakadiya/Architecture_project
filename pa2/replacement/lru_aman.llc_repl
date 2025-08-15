@@ -1,0 +1,144 @@
+#include "cache.h"
+
+// initialize replacement state
+void CACHE::llc_initialize_replacement()
+{
+    cout << NAME << " has LRU replacement policy" << endl;
+}
+
+void CACHE::adjust_set_partitioning()
+{
+    // cout << "Before----------------------------------------- \n";
+    // cout << "Set Allocation: CPU 0 = " << set_allocation[0] << ", CPU 1 = " << set_allocation[1] << endl;
+
+    const double miss_difference_threshold = 20.0;  // 20% difference threshold
+    const uint32_t min_sets_per_core = NUM_SET / 4; // Minimum sets per CPU
+
+    // Calculate total misses across all CPUs
+    uint64_t total_misses = 0;
+    for (uint32_t cpu = 0; cpu < NUM_CPUS; cpu++)
+    {
+        uint64_t current_cpu_misses = 0;
+        for (uint32_t type = 0; type < NUM_TYPES; type++)
+        {
+            current_cpu_misses += sim_miss[cpu][type];
+            total_misses += sim_miss[cpu][type];
+        }
+        // cout << "Misses on CPU " << cpu << " : " << current_cpu_misses << endl;
+    }
+
+    // cout << "Total misses: " << total_misses << endl;
+
+    // If no misses occurred, keep the current partitioning
+    if (total_misses == 0)
+    {
+        cout << "No cache misses occurred. Keeping current partitioning.\n";
+        return;
+    }
+
+    // Calculate miss percentages for each CPU
+    double miss_percentages[NUM_CPUS] = {0.0}; // Ensure initialization
+    for (uint32_t cpu = 0; cpu < NUM_CPUS; cpu++)
+    {
+        for (uint32_t type = 0; type < NUM_TYPES; type++)
+        {
+            miss_percentages[cpu] += (static_cast<double>(sim_miss[cpu][type]) / total_misses) * 100.0;
+        }
+        // cout << "Miss percentage of CPU " << cpu << " is: " << miss_percentages[cpu] << "%\n";
+    }
+
+    // Check if the difference in miss percentages exceeds the threshold
+    double max_miss_diff = abs(miss_percentages[0] - miss_percentages[1]);
+    if (max_miss_diff < miss_difference_threshold)
+    {
+        // cout << "Miss percentage difference is below the threshold. Keeping current partitioning.\n";
+        return;
+    }
+
+    // Determine which CPU has more misses and which has fewer
+    uint32_t cpu_with_more_misses = (miss_percentages[0] > miss_percentages[1]) ? 0 : 1;
+    uint32_t cpu_with_fewer_misses = (cpu_with_more_misses == 0) ? 1 : 0;
+
+    // cout << "CPU with more misses: CPU " << cpu_with_more_misses << endl;
+    // cout << "CPU with fewer misses: CPU " << cpu_with_fewer_misses << endl;
+
+    // Calculate the number of sets to transfer
+    double miss_diff = miss_percentages[cpu_with_more_misses] - miss_percentages[cpu_with_fewer_misses];
+    uint32_t sets_to_transfer = static_cast<uint32_t>((miss_diff / 100.0) * (NUM_SET / 2));
+
+    // cout << "Calculated sets to transfer: " << sets_to_transfer << endl;
+
+    // Ensure that both CPUs retain at least min_sets_per_core
+    if (set_allocation[cpu_with_fewer_misses] - sets_to_transfer < min_sets_per_core)
+    {
+        sets_to_transfer = set_allocation[cpu_with_fewer_misses] - min_sets_per_core;
+    }
+
+    // Ensure sets_to_transfer is non-negative
+    if (sets_to_transfer > set_allocation[cpu_with_fewer_misses])
+    {
+        sets_to_transfer = set_allocation[cpu_with_fewer_misses] - min_sets_per_core;
+    }
+
+    // cout << "Final sets to transfer after enforcing minimum allocation: " << sets_to_transfer << endl;
+
+    // Reallocate sets
+    set_allocation[cpu_with_more_misses] += sets_to_transfer;
+    set_allocation[cpu_with_fewer_misses] -= sets_to_transfer;
+
+    // Log the new set allocation
+    // cout << "Adjusted set allocation based on cache misses:\n";
+    for (uint32_t cpu = 0; cpu < NUM_CPUS; cpu++)
+    {
+        // cout << "CPU " << cpu << " allocated " << set_allocation[cpu] << " sets (Miss Percentage: " << miss_percentages[cpu] << "%)\n";
+    }
+}
+
+// find replacement victim
+uint32_t CACHE::llc_find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK *current_set, uint64_t ip, uint64_t full_addr, uint32_t type)
+{
+    // baseline LRU
+    uint32_t way = lru_victim(cpu, instr_id, set, current_set, ip, full_addr, type);
+    // cout << "CPU " << cpu << " Set " << set << endl;
+    // if (cpu == 0 && set >= 1024)
+    // {
+    //     cerr << "fault";
+    // }
+    // if (cpu == 1 && set < 1024 && set >= 2048)
+    // {
+    //     cerr << "fault";
+    // }
+    if (block[set][way].valid == 1)
+    {
+        self_evictions[cpu]++;
+    }
+    return way;
+}
+
+// called on every cache hit and cache fill
+void CACHE::llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit)
+{
+
+    if ((type == WRITEBACK) && ip)
+        assert(0);
+
+    // baseline LRU
+    if (hit && (type == WRITEBACK)) // writeback hit does not update LRU state
+        return;
+    cycle_count++;
+    if (cycle_count % partition_interval == 0)
+    {
+        adjust_set_partitioning();
+        // cout << "Updated set allocation based on self-evictions!" << endl;
+    }
+    return lru_update(set, way);
+}
+
+void CACHE::llc_replacement_final_stats()
+{
+    cout << "Final Self-Eviction Statistics:" << endl;
+    for (int i = 0; i < NUM_CPUS; i++)
+    {
+        cout << "Core " << i << " had " << self_evictions[i] << " self-evictions." << endl;
+    }
+}

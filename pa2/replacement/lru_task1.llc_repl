@@ -1,0 +1,83 @@
+#include "cache.h"
+
+// initialize replacement state
+void CACHE::llc_initialize_replacement()
+{
+    cout << NAME << " has LRU replacement policy" << endl;
+}
+
+// find replacement victim
+uint32_t CACHE::llc_find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK *current_set, uint64_t ip, uint64_t full_addr, uint32_t type)
+{
+    // Define way partitioning: assume 16-way cache
+    uint32_t num_ways_per_core = LLC_WAY / 2; 
+
+    uint32_t start_way = cpu * num_ways_per_core;  
+    uint32_t end_way = start_way + num_ways_per_core; 
+
+    uint32_t way;
+
+    // fill invalid line first
+    for (way = start_way; way < end_way; way++)
+    {
+        if (block[set][way].valid == 0)
+        {
+            break;
+        }
+    }
+
+    // LRU victim
+    if (way == end_way)
+    {
+        way = start_way;
+        for (uint32_t i = start_way; i < end_way; i++)
+        {
+            if (block[set][i].lru > block[set][way].lru)
+            {
+                way = i;
+            }
+        }
+    }
+
+    if (way == end_way)
+    {
+        cerr << "[" << NAME << "] " << __func__ << " no victim! set: " << set << endl;
+        assert(0);
+    }
+    // cout << "Core " << cpu << " self-evicted its own block from set " << set << ", way " << way << endl;
+    if (block[set][way].valid == 1){
+        self_evictions[cpu]++;
+    }
+
+    return way;
+}
+
+// called on every cache hit and cache fill
+void CACHE::llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit)
+{
+    if (hit && (type == WRITEBACK))
+        return;
+
+    // Ensure the update happens only within the partitioned ways
+    uint32_t num_ways_per_core = LLC_WAY / 2;
+    uint32_t start_way = cpu * num_ways_per_core;
+    uint32_t end_way = start_way + num_ways_per_core;
+
+    for (uint32_t i = start_way; i < end_way; i++)
+    {
+        if (block[set][i].lru < block[set][way].lru)
+        {
+            block[set][i].lru++;
+        }
+    }
+    block[set][way].lru = 0; // Update only within assigned ways
+}
+
+void CACHE::llc_replacement_final_stats()
+{
+    cout << "Self-Eviction Stat:" << endl;
+    for (int i = 0; i < NUM_CPUS; i++)
+    {
+        cout << "CPU " << i << " : " << self_evictions[i] << endl;
+    }
+}
