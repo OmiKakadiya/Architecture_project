@@ -1,8 +1,5 @@
-                                    CSE 773 Assignment 1
+Omi Kakadiya 24M0789
 
-Suraj Patil 24m0837
-Shubh Nagar 24m0764
-Abhishek Singh 24m0808
 
 Task 2A
 
@@ -29,7 +26,7 @@ Task 2B
 
 Initial Setup:-
     
-- Here rec1.c and send.c programs are used to get the average values for counter to decide if sender is sending bit 1 or 0.
+- Here tsend.c and rsend.c programs are used to get the average values for counter to decide if sender is sending bit 1 or 0.
 - Run the calibrate.sh script to get the average values of counter for bit 1 and 0.
 - ./calibrate.sh $array_increment_step_size_for_sender.
 - Once we get the counters then change then threshold values of receiver.c program.
@@ -41,7 +38,6 @@ Data Transmission:-
   array to trash.
 - Receiver prgram keeps on accessing its array for each time window and calculates counter value
 - Then we compare it with the average counter values to deduce if the  sender is sending bit 1 or 0.
-- Lets say, counter value without sender thrashing is a1, when sending 1 its a2 and a3 for 0 - when a1 is the counter, receiver does nothing and gets the bits otherwise.
     
 For task 2B we were able to receive only this part of the message and were able to achieve a bandwidth of 10-15 bits per second.
 
