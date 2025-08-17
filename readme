@@ -1,2 +1,2 @@
-Implemented Flush-Reload with 80% accuracy and 8.8 kbps bandwidth, and occupancy-based with 78% accuracy and 10–15 bps bandwidth, as cache covert channels to transmit text between isolated processes
+Implemented Flush-Reload with 93% accuracy and 8.8 kbps bandwidth, and occupancy-based with 90% accuracy and 10–15 bps bandwidth, as cache covert channels to transmit text between isolated processes
 Applied Way and Set Partitioning (static & dynamic) in Champsim’s LLC, and benchmarked against a non-secure baseline on mcf and perl, with normalized speedup, LLC MPKI, and self-evictions.
